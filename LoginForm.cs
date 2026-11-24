@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Drawing.Text;
 using System.Windows.Forms;
 
 namespace PhotoStudio
@@ -29,19 +30,33 @@ namespace PhotoStudio
             var bg = new BokehPanel { Dock = DockStyle.Fill };
             Controls.Add(bg);
 
-            bg.Controls.Add(new Label
+            // Логотип и подпись рисуются прямо на анимированном фоне (а не Label-ами с прозрачным фоном,
+            // которые давали тёмные прямоугольники и заезжали на карточку входа)
+            bg.PaintOverlay = g =>
             {
-                Text = "◉ ОБЪЕКТИВ", Font = new Font("Georgia", 36f, FontStyle.Bold),
-                ForeColor = Theme.Accent, BackColor = Color.Transparent, AutoSize = true, Location = new Point(50, 190)
-            });
-            bg.Controls.Add(new Label
-            {
-                Text = "фотостудия\nклиенты  •  съёмки  •  заказы\nпечать  •  оплата",
-                Font = new Font("Georgia", 14f, FontStyle.Italic), ForeColor = Theme.Fg,
-                BackColor = Color.Transparent, AutoSize = true, Location = new Point(56, 270)
-            });
+                g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+                using (var titleBrush = new SolidBrush(Theme.Accent))
+                using (var subBrush = new SolidBrush(Theme.Fg))
+                using (var subFont = new Font("Georgia", 14f, FontStyle.Italic))
+                {
+                    float maxW = Math.Max(200, _card.Left - 50 - 30);
+                    float size = 34f;
+                    Font titleFont = new Font("Georgia", size, FontStyle.Bold);
+                    float w = g.MeasureString("◉ ОБЪЕКТИВ", titleFont).Width;
+                    if (w > maxW)
+                    {
+                        size = size * maxW / w;
+                        titleFont.Dispose();
+                        titleFont = new Font("Georgia", size, FontStyle.Bold);
+                    }
+                    g.DrawString("◉ ОБЪЕКТИВ", titleFont, titleBrush, 46, 186);
+                    float th = titleFont.GetHeight(g);
+                    titleFont.Dispose();
+                    g.DrawString("фотостудия\nклиенты  •  съёмки  •  заказы\nпечать  •  оплата", subFont, subBrush, 52, 186 + th + 10);
+                }
+            };
 
-            _card.Size = new Size(360, 410);
+            _card.Size = new Size(360, 430);
             _card.BackColor = Theme.Surface;
             _finalTop = (ClientSize.Height - _card.Height) / 2;
             _card.Location = new Point(500, _finalTop + 60);
@@ -77,7 +92,7 @@ namespace PhotoStudio
             {
                 Text = "Демо-доступ:\nadmin / admin123 — администратор\nmanager / user123 — пользователь",
                 ForeColor = Theme.Muted, Font = Theme.Small, BackColor = Theme.Surface,
-                Location = new Point(28, 340), Size = new Size(304, 56)
+                Location = new Point(28, 340), Size = new Size(304, 70)
             });
 
             Shown += (s, ev) =>

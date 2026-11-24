@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
 using System.Drawing.Text;
 using System.Globalization;
 using System.Windows.Forms;
@@ -118,6 +119,9 @@ namespace PhotoStudio
         readonly System.Windows.Forms.Timer _t = new System.Windows.Forms.Timer { Interval = 33 };
         readonly Random _rnd = new Random();
 
+        /// <summary>Рисование поверх боке-кругов (текст, логотип) — без Label с прозрачным фоном, который даёт тёмные прямоугольники.</summary>
+        public Action<Graphics> PaintOverlay;
+
         public BokehPanel()
         {
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint |
@@ -182,6 +186,7 @@ namespace PhotoStudio
                 using (var p = new Pen(Color.FromArgb(Math.Min(255, a + 30), d.C), 1.2f))
                     g.DrawEllipse(p, d.X - d.R, d.Y - d.R, d.R * 2, d.R * 2);
             }
+            if (PaintOverlay != null) PaintOverlay(g);
         }
 
         protected override void Dispose(bool disposing)
@@ -277,6 +282,63 @@ namespace PhotoStudio
                 _delayTimer.Stop();
                 _delayTimer.Dispose();
                 _delayTimer = null;
+            }
+            base.Dispose(disposing);
+        }
+    }
+
+    /// <summary>«Занавес» для перехода между страницами: плавно перетекает снимок старой страницы в снимок новой (затухание + лёгкий сдвиг).
+    /// Двигается только готовая картинка, а не десятки дочерних контролов, поэтому анимация идёт без рывков.</summary>
+    public class PageCurtain : Control
+    {
+        Bitmap _from, _to;
+        float _p;
+        readonly ImageAttributes _attr = new ImageAttributes();
+        readonly ColorMatrix _cm = new ColorMatrix();
+        const int Shift = 26;
+
+        public float Progress
+        {
+            get { return _p; }
+            set { _p = Math.Clamp(value, 0f, 1f); Invalidate(); }
+        }
+
+        public PageCurtain(Bitmap from, Bitmap to)
+        {
+            _from = from; _to = to;
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint |
+                     ControlStyles.OptimizedDoubleBuffer | ControlStyles.Opaque, true);
+            TabStop = false;
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.CompositingQuality = CompositingQuality.HighSpeed;
+            g.InterpolationMode = InterpolationMode.NearestNeighbor;
+            g.PixelOffsetMode = PixelOffsetMode.Half;
+            g.Clear(Theme.Bg);
+
+            if (_from != null)
+                g.DrawImageUnscaled(_from, 0, 0);
+
+            if (_to != null)
+            {
+                _cm.Matrix33 = Math.Clamp(_p, 0f, 1f);
+                _attr.SetColorMatrix(_cm, ColorMatrixFlag.Default, ColorAdjustType.Bitmap);
+                int dx = (int)Math.Round(Shift * (1f - _p));
+                g.DrawImage(_to, new Rectangle(dx, 0, _to.Width, _to.Height),
+                            0, 0, _to.Width, _to.Height, GraphicsUnit.Pixel, _attr);
+            }
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _attr.Dispose();
+                if (_from != null) { _from.Dispose(); _from = null; }
+                if (_to != null) { _to.Dispose(); _to = null; }
             }
             base.Dispose(disposing);
         }

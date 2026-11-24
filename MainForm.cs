@@ -308,45 +308,76 @@ namespace PhotoStudio
             Open(new SearchPage(q, Go), null, crumbs);
         }
 
-        /// <summary>Показывает страницу с плавной анимацией «въезда» справа.</summary>
+        /// <summary>Показывает страницу с плавным переходом: снимок старой страницы перетекает в снимок новой
+        /// (затухание + лёгкий сдвиг справа). Сама страница появляется уже готовой, без перерисовки на каждом кадре.</summary>
         void Open(Control page, string activeKey, List<(string text, Action click)> crumbs)
         {
             int id = ++_navId;
-            Control old = _current;
+            bool first = _current == null;
             _current = page;
 
+            int w = _content.ClientSize.Width, h = _content.ClientSize.Height;
+            bool animate = !first && w > 8 && h > 8 && _content.IsHandleCreated && Visible;
+
+            // 1) снимок того, что на экране сейчас (вместе с незавершённым переходом, если он идёт)
+            Bitmap from = null;
+            if (animate)
+            {
+                try
+                {
+                    from = new Bitmap(w, h);
+                    _content.DrawToBitmap(from, new Rectangle(0, 0, w, h));
+                }
+                catch { if (from != null) from.Dispose(); from = null; animate = false; }
+            }
+
+            // 2) убираем старое содержимое
             foreach (Control c in _content.Controls.Cast<Control>().ToList())
             {
-                if (c != old) { _content.Controls.Remove(c); c.Dispose(); }
+                _content.Controls.Remove(c);
+                c.Dispose();
             }
-            if (old != null) old.Dock = DockStyle.Fill;
 
-            const int slideOffset = 36;
-            page.Dock = DockStyle.None;
-            page.SetBounds(slideOffset, 0, _content.ClientSize.Width, _content.ClientSize.Height);
+            // 3) ставим новую страницу и обновляем меню / крошки
+            page.Dock = DockStyle.Fill;
             _content.Controls.Add(page);
-            page.BringToFront();
             SetActive(activeKey);
             SetCrumbs(crumbs);
 
-            Anim.Run(220,
-                p =>
-                {
-                    if (id == _navId && !page.IsDisposed)
-                        page.Left = (int)Math.Round(slideOffset * (1f - p));
-                },
+            if (!animate) { if (from != null) from.Dispose(); return; }
+
+            // 4) снимок новой страницы
+            Bitmap to = null;
+            try
+            {
+                _content.PerformLayout();
+                page.SetBounds(0, 0, w, h);
+                page.PerformLayout();
+                to = new Bitmap(w, h);
+                page.DrawToBitmap(to, new Rectangle(0, 0, w, h));
+            }
+            catch
+            {
+                if (from != null) from.Dispose();
+                if (to != null) to.Dispose();
+                return;
+            }
+
+            // 5) плавный переход
+            var curtain = new PageCurtain(from, to) { Dock = DockStyle.Fill };
+            _content.Controls.Add(curtain);
+            curtain.BringToFront();
+
+            Anim.Run(340,
+                p => { if (id == _navId && !curtain.IsDisposed) curtain.Progress = Anim.EaseOut(p); },
                 () =>
                 {
-                    if (id != _navId || page.IsDisposed) return;
-                    page.Dock = DockStyle.Fill;
-                    if (old != null && !old.IsDisposed)
-                    {
-                        _content.Controls.Remove(old);
-                        old.Dispose();
-                    }
+                    if (curtain.IsDisposed) return;
+                    _content.Controls.Remove(curtain);
+                    curtain.Dispose();
                 },
-                true,
-                page);
+                false,
+                curtain);
         }
 
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)

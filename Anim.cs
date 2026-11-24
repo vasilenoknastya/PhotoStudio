@@ -16,6 +16,13 @@ namespace PhotoStudio
                 : 1f - (float)Math.Pow(-2f * t + 2f, 3) / 2f;
         }
 
+        /// <summary>Быстрый старт и мягкое торможение (ease-out quint) — для переходов между страницами.</summary>
+        public static float EaseOut(float t)
+        {
+            t = Math.Clamp(t, 0f, 1f);
+            return 1f - (float)Math.Pow(1f - t, 4);
+        }
+
         public static void Run(int ms, Action<float> step, Action done = null, bool ease = true, Control owner = null)
         {
             if (step == null) return;
