@@ -73,9 +73,11 @@ namespace PhotoStudio
         public static void Apply(Form form)
         {
             if (form == null || form.IsDisposed) return;
-            var old = form.Icon;
+            // ВАЖНО: старое значение form.Icon нельзя освобождать.
+            // Если иконка форме ещё не назначалась, свойство возвращает общую (разделяемую)
+            // иконку WinForms, и её Dispose() ломает создание окон у всех остальных форм:
+            // ObjectDisposedException в Form.CreateHandle() -> Icon.get_Handle().
             form.Icon = Create(64);
-            if (old != null) old.Dispose();
         }
 
         static GraphicsPath CreateRoundedRect(RectangleF r, float radius)

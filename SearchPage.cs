@@ -48,9 +48,14 @@ namespace PhotoStudio
 
             Theme.StyleGrid(_grid);
             _grid.Dock = DockStyle.Fill;
+            // Колонки у DataGridView появляются только после привязки к контексту формы,
+            // поэтому скрываем служебные столбцы в событии завершения привязки, а не сразу.
+            _grid.DataBindingComplete += (s, ev) =>
+            {
+                if (_grid.Columns.Contains("Key")) _grid.Columns["Key"].Visible = false;
+                if (_grid.Columns.Contains("Txt")) _grid.Columns["Txt"].Visible = false;
+            };
             _grid.DataSource = _view;
-            _grid.Columns["Key"].Visible = false;
-            _grid.Columns["Txt"].Visible = false;
             _grid.CellDoubleClick += (s, ev) => { if (ev.RowIndex >= 0) OpenRow(); };
 
             var host = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Bg, Padding = new Padding(20, 4, 20, 0) };
